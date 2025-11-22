@@ -24,6 +24,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
+# Create creds directory for persistent data
+RUN mkdir -p /app/creds
+
+# Declare volume for persistent data (credentials, config, guestbook)
+VOLUME ["/app/creds"]
+
 # Expose port
 EXPOSE 7861
 

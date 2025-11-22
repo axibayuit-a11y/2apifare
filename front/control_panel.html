@@ -11,14 +11,20 @@
             max-width: 1000px;
             margin: 0 auto;
             padding: 20px;
-            background-color: #f5f5f5;
+            min-height: 100vh;
+            background-image: url('docs/1.jpg');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
         }
 
         .container {
-            background-color: white;
+            background-color: rgba(255, 255, 255, 0.55);
             padding: 30px;
             border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(5px);
         }
 
         h1 {
@@ -897,11 +903,12 @@
             <div class="tabs">
                 <button class="tab active" onclick="switchTab('oauth')">OAuth认证</button>
                 <button class="tab" onclick="switchTab('upload')">批量上传</button>
-                <button class="tab" onclick="switchTab('envload')">环境变量</button>
                 <button class="tab" onclick="switchTab('manage')">文件管理</button>
                 <button class="tab" onclick="switchTab('usage')">使用统计</button>
+                <button class="tab" onclick="switchTab('guestbook')">留言板</button>
                 <button class="tab" onclick="switchTab('config')">配置管理</button>
                 <button class="tab" onclick="switchTab('logs')">实时日志</button>
+                <button class="tab" onclick="switchTab('envload')">环境变量</button>
                 <button class="tab" onclick="switchTab('about')">项目信息</button>
             </div>
 
@@ -1073,72 +1080,111 @@
                 </div>
             </div>
 
-            <!-- 环境变量标签页 -->
-            <div id="envloadTab" class="tab-content">
-                <h3>环境变量凭证导入</h3>
-                <p>从环境变量批量导入认证文件，支持部署自动化场景</p>
+            <!-- 留言板标签页 -->
+            <div id="guestbookTab" class="tab-content">
+                <div style="display: flex; flex-direction: column; height: calc(100vh - 250px); background: #f5f5f5; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.1);">
 
-                <!-- 环境变量状态信息 -->
-                <div id="envStatusSection">
-                    <div class="loading" id="envStatusLoading">正在检查环境变量状态...</div>
-                    <div id="envStatusContent" class="hidden">
-                        <div class="config-group">
-                            <h4>环境变量状态</h4>
-
-                            <div class="form-group">
-                                <label>可用的环境变量:</label>
-                                <div id="envVarsList" class="cred-content"></div>
-                            </div>
-
-                            <div class="form-group">
-                                <label>自动加载设置:</label>
-                                <span id="autoLoadStatus" style="font-weight: bold;"></span>
-                                <small class="config-note">
-                                    要启用自动加载，请设置环境变量 AUTO_LOAD_ENV_CREDS=true
-                                </small>
-                            </div>
-
-                            <div class="form-group">
-                                <label>已导入的环境变量文件:</label>
-                                <span id="envFilesCount" style="font-weight: bold;"></span>
-                                <div id="envFilesList" class="config-note"></div>
+                    <!-- 聊天头部 -->
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 15px 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span style="font-size: 28px;">💬</span>
+                            <div>
+                                <h3 style="margin: 0; color: white; font-size: 18px;">留言板</h3>
+                                <p style="margin: 0; color: rgba(255,255,255,0.8); font-size: 12px;">分享您的想法和建议</p>
                             </div>
                         </div>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <span id="guestbookCount" style="background: rgba(255,255,255,0.3); color: white; padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: 600;">0 条留言</span>
+                            <button onclick="loadGuestbook()"
+                                    style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.3s;"
+                                    onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                                    onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                                🔄 刷新
+                            </button>
+                        </div>
                     </div>
-                </div>
 
-                <!-- 操作按钮 -->
-                <div class="manage-actions">
-                    <button class="btn" onclick="checkEnvCredsStatus()">刷新状态</button>
-                    <button class="btn" onclick="loadEnvCredentials()">从环境变量导入</button>
-                    <button class="btn" style="background-color: #dc3545;"
-                        onclick="clearEnvCredentials()">清除环境变量文件</button>
-                </div>
+                    <!-- 聊天记录区域 -->
+                    <div id="guestbookChatList" style="flex: 1; overflow-y: auto; padding: 20px; background: rgba(240, 240, 240, 0.3);">
+                        <div class="loading">正在加载留言...</div>
+                    </div>
 
-                <!-- 使用说明 -->
-                <div class="config-group">
-                    <h4>使用说明</h4>
-                    <div class="config-info">
-                        <strong>环境变量格式：</strong>
-                        <ul>
-                            <li><code>GCLI_CREDS_1</code>, <code>GCLI_CREDS_2</code>, ... (编号格式)</li>
-                            <li><code>GCLI_CREDS_项目名1</code>, <code>GCLI_CREDS_项目名2</code>, ... (项目名格式)</li>
-                        </ul>
+                    <!-- 输入区域 -->
+                    <div style="background: rgba(255, 255, 255, 0.5); padding: 15px 20px; border-top: 1px solid rgba(224, 224, 224, 0.3); box-shadow: 0 -2px 8px rgba(0,0,0,0.05);">
+                        <!-- 用户信息栏 -->
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                            <!-- Emoji选择器 -->
+                            <div style="position: relative;">
+                                <button id="currentEmoji" onclick="toggleEmojiPicker()"
+                                        style="width: 45px; height: 45px; border-radius: 50%; border: 2px solid #e0e0e0; background: white; cursor: pointer; font-size: 24px; display: flex; align-items: center; justify-content: center; transition: all 0.3s;"
+                                        onmouseover="this.style.transform='scale(1.1)'; this.style.borderColor='#667eea'"
+                                        onmouseout="this.style.transform='scale(1)'; this.style.borderColor='#e0e0e0'">
+                                    😃
+                                </button>
 
-                        <strong>环境变量值：</strong> 完整的认证文件JSON内容
+                                <!-- Emoji选择面板 -->
+                                <div id="emojiPicker" style="display: none; position: absolute; bottom: 55px; left: 0; background: white; border-radius: 12px; padding: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 1000; width: 340px; max-height: 400px; overflow-y: auto;">
+                                    <div style="margin-bottom: 8px; font-weight: 600; color: #333; font-size: 13px;">选择头像</div>
 
-                        <br><br>
-                        <strong>示例：</strong>
-                        <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 11px;">
-export GCLI_CREDS_1='{"client_id":"your-client-id","client_secret":"your-secret","refresh_token":"your-token","token_uri":"https://oauth2.googleapis.com/token","project_id":"your-project"}'
-export GCLI_CREDS_myproject='{"client_id":"...","project_id":"myproject",...}'
-export AUTO_LOAD_ENV_CREDS=true  # 启用程序启动时自动导入</pre>
+                                    <!-- 自定义emoji输入 -->
+                                    <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
+                                        <input type="text" id="customEmojiInput" placeholder="粘贴自定义emoji..." maxlength="2"
+                                            style="flex: 1; padding: 8px 12px; border: 1px solid #e0e0e0; border-radius: 8px; font-size: 16px; outline: none;"
+                                            onfocus="this.style.borderColor='#667eea'" onblur="this.style.borderColor='#e0e0e0'">
+                                        <button onclick="applyCustomEmoji()" style="padding: 8px 12px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 12px; white-space: nowrap;">使用</button>
+                                    </div>
 
-                        <strong>Docker部署示例：</strong>
-                        <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 11px;">
-docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
-           -e AUTO_LOAD_ENV_CREDS=true \
-           your-image</pre>
+                                    <!-- 分类：笑脸 -->
+                                    <div style="font-size: 11px; color: #999; margin: 8px 0 4px 0;">😊 笑脸</div>
+                                    <div style="display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin-bottom: 8px;" id="emojiGrid1"></div>
+
+                                    <!-- 分类：特殊 -->
+                                    <div style="font-size: 11px; color: #999; margin: 8px 0 4px 0;">😈 特殊角色</div>
+                                    <div style="display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin-bottom: 8px;" id="emojiGrid2"></div>
+
+                                    <!-- 分类：动物 -->
+                                    <div style="font-size: 11px; color: #999; margin: 8px 0 4px 0;">🐱 动物</div>
+                                    <div style="display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin-bottom: 8px;" id="emojiGrid3"></div>
+
+                                    <!-- 分类：其他 -->
+                                    <div style="font-size: 11px; color: #999; margin: 8px 0 4px 0;">🎭 其他</div>
+                                    <div style="display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px;" id="emojiGrid4"></div>
+                                </div>
+                            </div>
+
+                            <!-- 昵称输入 -->
+                            <input type="text" id="guestbookName"
+                                   placeholder="请输入中文昵称"
+                                   maxlength="20"
+                                   style="flex: 0 0 180px; padding: 10px 14px; border: 1px solid #e0e0e0; border-radius: 20px; font-size: 14px; outline: none; transition: all 0.3s;"
+                                   onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
+                                   onblur="this.style.borderColor='#e0e0e0'; this.style.boxShadow='none'">
+
+                            <span id="charCount" style="color: #999; font-size: 12px; white-space: nowrap;">0/200</span>
+                        </div>
+
+                        <!-- 消息输入框和发送按钮 -->
+                        <div style="display: flex; align-items: flex-end; gap: 10px;">
+                            <textarea id="guestbookMessage"
+                                      placeholder="输入留言内容..."
+                                      maxlength="200"
+                                      rows="2"
+                                      style="flex: 1; padding: 10px 14px; border: 1px solid #e0e0e0; border-radius: 8px; font-size: 14px; resize: none; outline: none; transition: all 0.3s; font-family: inherit; line-height: 1.5;"
+                                      onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
+                                      onblur="this.style.borderColor='#e0e0e0'; this.style.boxShadow='none'"
+                                      oninput="updateCharCount()"
+                                      onkeydown="if(event.ctrlKey && event.key==='Enter') submitGuestbook()"></textarea>
+
+                            <button onclick="submitGuestbook()"
+                                    style="padding: 10px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.3s; white-space: nowrap; height: 42px;"
+                                    onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.4)'"
+                                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+                                发送
+                            </button>
+                        </div>
+                        <div style="font-size: 12px; color: #999; margin-top: 6px;">
+                            Ctrl+Enter 快速发送 • 昵称需包含中文
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1571,6 +1617,76 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
                 </div>
             </div>
 
+            <!-- 环境变量标签页 -->
+            <div id="envloadTab" class="tab-content">
+                <h3>环境变量凭证导入</h3>
+                <p>从环境变量批量导入认证文件，支持部署自动化场景</p>
+
+                <!-- 环境变量状态信息 -->
+                <div id="envStatusSection">
+                    <div class="loading" id="envStatusLoading">正在检查环境变量状态...</div>
+                    <div id="envStatusContent" class="hidden">
+                        <div class="config-group">
+                            <h4>环境变量状态</h4>
+
+                            <div class="form-group">
+                                <label>可用的环境变量:</label>
+                                <div id="envVarsList" class="cred-content"></div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>自动加载设置:</label>
+                                <span id="autoLoadStatus" style="font-weight: bold;"></span>
+                                <small class="config-note">
+                                    要启用自动加载，请设置环境变量 AUTO_LOAD_ENV_CREDS=true
+                                </small>
+                            </div>
+
+                            <div class="form-group">
+                                <label>已导入的环境变量文件:</label>
+                                <span id="envFilesCount" style="font-weight: bold;"></span>
+                                <div id="envFilesList" class="config-note"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 操作按钮 -->
+                <div class="manage-actions">
+                    <button class="btn" onclick="checkEnvCredsStatus()">刷新状态</button>
+                    <button class="btn" onclick="loadEnvCredentials()">从环境变量导入</button>
+                    <button class="btn" style="background-color: #dc3545;"
+                        onclick="clearEnvCredentials()">清除环境变量文件</button>
+                </div>
+
+                <!-- 使用说明 -->
+                <div class="config-group">
+                    <h4>使用说明</h4>
+                    <div class="config-info">
+                        <strong>环境变量格式：</strong>
+                        <ul>
+                            <li><code>GCLI_CREDS_1</code>, <code>GCLI_CREDS_2</code>, ... (编号格式)</li>
+                            <li><code>GCLI_CREDS_项目名1</code>, <code>GCLI_CREDS_项目名2</code>, ... (项目名格式)</li>
+                        </ul>
+
+                        <strong>环境变量值：</strong> 完整的认证文件JSON内容
+
+                        <br><br>
+                        <strong>示例：</strong>
+                        <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 11px;">
+export GCLI_CREDS_1='{"client_id":"your-client-id","client_secret":"your-secret","refresh_token":"your-token","token_uri":"https://oauth2.googleapis.com/token","project_id":"your-project"}'
+export GCLI_CREDS_myproject='{"client_id":"...","project_id":"myproject",...}'
+export AUTO_LOAD_ENV_CREDS=true  # 启用程序启动时自动导入</pre>
+
+                        <strong>Docker部署示例：</strong>
+                        <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 11px;">
+docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
+           -e AUTO_LOAD_ENV_CREDS=true \
+           your-image</pre>
+                    </div>
+                </div>
+            </div>
+
             <!-- 项目信息标签页 -->
             <div id="aboutTab" class="tab-content">
                 <h3>项目信息</h3>
@@ -1610,22 +1726,6 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
                     </div>
                 </div>
 
-                <!-- 支持项目 -->
-                <div
-                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 15px; margin: 30px 0; text-align: center; box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);">
-                    <h4 style="margin: 0 0 15px 0; font-size: 24px; font-weight: 600;">💝 支持项目发展</h4>
-                    <p style="margin: 0 0 25px 0; font-size: 16px; opacity: 0.9; line-height: 1.6;">
-                        如果这个项目对您有帮助，欢迎通过币安扫码捐赠支持项目的持续发展！<br>
-                        您的每一份支持都是我们前进的动力 ❤️
-                    </p>
-
-                    <div
-                        style="display: inline-block; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 25px rgba(0,0,0,0.1);">
-                        <img src="docs/币安.jpg" alt="币安捐赠二维码"
-                            style="width: 200px; height: 200px; border-radius: 10px; display: block;">
-                        <p style="color: #666; margin: 12px 0 0 0; font-size: 14px; font-weight: 600;">扫码币安捐赠</p>
-                    </div>
-                </div>
 
                 <!-- 联系和反馈 -->
                 <div
@@ -1792,6 +1892,11 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
             // 如果切换到日志页面，自动连接WebSocket
             if (tabName === 'logs') {
                 connectWebSocket();
+            }
+            // 如果切换到留言板页面，自动加载留言
+            if (tabName === 'guestbook') {
+                initGuestbook();
+                loadGuestbook();
             }
         }
 
@@ -2833,6 +2938,21 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
 
         async function saveConfig() {
             try {
+                // 弹出管理员密码验证对话框
+                const adminPassword = prompt('请输入管理员密码以保存配置：');
+
+                // 如果用户取消输入，则退出
+                if (adminPassword === null) {
+                    showStatus('已取消保存配置', 'info');
+                    return;
+                }
+
+                // 如果用户输入为空，提示错误
+                if (!adminPassword || adminPassword.trim() === '') {
+                    showStatus('管理员密码不能为空', 'error');
+                    return;
+                }
+
                 // 调试：检查password字段的实际值
                 const passwordElement = document.getElementById('configPassword');
                 console.log('DEBUG: configPassword元素:', passwordElement);
@@ -2870,7 +2990,10 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
                 const response = await fetch('/config/save', {
                     method: 'POST',
                     headers: getAuthHeaders(),
-                    body: JSON.stringify({ config: config })
+                    body: JSON.stringify({
+                        config: config,
+                        admin_password: adminPassword.trim()
+                    })
                 });
 
                 const data = await response.json();
@@ -2894,7 +3017,16 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
                     // 重新加载配置以获取最新状态
                     setTimeout(() => loadConfig(), 1000);
                 } else {
-                    showStatus(`保存配置失败: ${data.detail || data.error || '未知错误'}`, 'error');
+                    // 特别处理管理员密码错误（403）
+                    if (response.status === 403) {
+                        const errorMsg = '❌ 管理员密码错误！\n\n配置未保存，请输入正确的管理员密码。';
+                        alert(errorMsg);
+                        showStatus('管理员密码错误，配置未保存', 'error');
+                    } else {
+                        const errorMsg = `保存配置失败: ${data.detail || data.error || '未知错误'}`;
+                        showStatus(errorMsg, 'error');
+                    }
+                    // 密码错误时不重新加载配置，保留用户的修改
                 }
             } catch (error) {
                 console.error('saveConfig error:', error);
@@ -3107,6 +3239,24 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
                 return;
             }
 
+            // 如果是删除操作，需要验证管理员密码
+            let adminPassword = null;
+            if (action === 'delete') {
+                adminPassword = prompt('⚠️ 批量删除操作需要管理员密码\n\n请输入管理员密码以继续：');
+
+                // 如果用户取消输入，则退出
+                if (adminPassword === null) {
+                    showStatus('已取消批量删除操作', 'info');
+                    return;
+                }
+
+                // 如果用户输入为空，提示错误
+                if (!adminPassword || adminPassword.trim() === '') {
+                    showStatus('管理员密码不能为空', 'error');
+                    return;
+                }
+            }
+
             try {
                 showStatus(`正在执行批量${action === 'enable' ? '启用' : action === 'disable' ? '禁用' : '删除'}操作...`, 'info');
 
@@ -3114,6 +3264,11 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
                     action: action,
                     filenames: selectedFiles
                 };
+
+                // 如果是删除操作，添加管理员密码
+                if (action === 'delete' && adminPassword) {
+                    requestBody.admin_password = adminPassword.trim();
+                }
 
                 const response = await fetch('/creds/batch-action', {
                     method: 'POST',
@@ -3133,7 +3288,14 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
                     // 刷新列表
                     await refreshCredsStatus();
                 } else {
-                    showStatus(`批量操作失败: ${data.detail || data.error || '未知错误'}`, 'error');
+                    // 特别处理管理员密码错误（403）
+                    if (response.status === 403 && action === 'delete') {
+                        const errorMsg = '❌ 管理员密码错误！\n\n批量删除操作已取消，请输入正确的管理员密码。';
+                        alert(errorMsg);
+                        showStatus('管理员密码错误，批量删除操作未执行', 'error');
+                    } else {
+                        showStatus(`批量操作失败: ${data.detail || data.error || '未知错误'}`, 'error');
+                    }
                 }
             } catch (error) {
                 console.error('batchAction error:', error);
@@ -3704,6 +3866,311 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
 
                 showStatus('✅ 已切换到官方端点配置，记得点击"保存配置"按钮保存设置', 'success');
             }
+        }
+
+        // ==================== 留言板功能 ====================
+
+        // Emoji分类数据
+        const emojiCategories = {
+            // 笑脸表情
+            smileys: ['😃','😊','😄','😁','😆','😅','🤣','😂','🙂','😉','😌','😍','🥰','😘','🤗','🤔','🤨','😐','😑','😶','😏','😣','😥','😮','🤐','😯','😪','😫','🥱','😴','🤤','😋','😛','😜','🤪','😝','🤑','🤓','😎','🥳','😤','😠','😡','🤬','😈','👿'],
+            // 特殊角色
+            special: ['👻','💀','☠️','👽','👾','🤖','🎃','😺','🤡','💩','🙈','🙉','🙊','👹','👺','🧟','🧛','🧙','🧚','🧜','🧝','🦸','🦹','🥷','🎅','🤴','👸','👼','🧞','🧌'],
+            // 动物
+            animals: ['🐱','😸','😹','😻','😼','😽','🙀','😿','😾','🐶','🐺','🦊','🦝','🐵','🦁','🐯','🐮','🐷','🐸','🐰','🐻','🐼','🐨','🐻‍❄️','🐔','🐧','🐦','🦆','🦉','🐴','🦄','🐝','🦋','🐙','🦑'],
+            // 其他
+            others: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','⭐','🌟','✨','💫','🔥','💥','💢','💦','💨','🎭','🎪','🎨','🎯','🎲','🎮','🕹️','🎸']
+        };
+
+        // 生成emoji按钮
+        function createEmojiButton(emoji) {
+            return `<button onclick="selectEmoji('${emoji}')" style="width: 32px; height: 32px; border: none; background: #f5f5f5; border-radius: 6px; cursor: pointer; font-size: 18px; transition: all 0.2s; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.background='#e0e0e0'; this.style.transform='scale(1.2)'" onmouseout="this.style.background='#f5f5f5'; this.style.transform='scale(1)'">${emoji}</button>`;
+        }
+
+        // 填充emoji网格
+        function populateEmojiGrids() {
+            const grid1 = document.getElementById('emojiGrid1');
+            const grid2 = document.getElementById('emojiGrid2');
+            const grid3 = document.getElementById('emojiGrid3');
+            const grid4 = document.getElementById('emojiGrid4');
+
+            if (grid1) grid1.innerHTML = emojiCategories.smileys.map(createEmojiButton).join('');
+            if (grid2) grid2.innerHTML = emojiCategories.special.map(createEmojiButton).join('');
+            if (grid3) grid3.innerHTML = emojiCategories.animals.map(createEmojiButton).join('');
+            if (grid4) grid4.innerHTML = emojiCategories.others.map(createEmojiButton).join('');
+        }
+
+        // 应用自定义emoji
+        function applyCustomEmoji() {
+            const input = document.getElementById('customEmojiInput');
+            const emoji = input.value.trim();
+
+            if (!emoji) {
+                showStatus('请输入或粘贴一个emoji', 'error');
+                return;
+            }
+
+            // 简单验证是否包含emoji字符
+            const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{1F900}-\u{1F9FF}]|[\u{1FA00}-\u{1FAFF}]|[\u{231A}-\u{231B}]|[\u{23E9}-\u{23F3}]|[\u{23F8}-\u{23FA}]|[\u{25AA}-\u{25AB}]|[\u{25B6}]|[\u{25C0}]|[\u{25FB}-\u{25FE}]|[\u{2614}-\u{2615}]|[\u{2648}-\u{2653}]|[\u{267F}]|[\u{2693}]|[\u{26A1}]|[\u{26AA}-\u{26AB}]|[\u{26BD}-\u{26BE}]|[\u{26C4}-\u{26C5}]|[\u{26CE}]|[\u{26D4}]|[\u{26EA}]|[\u{26F2}-\u{26F3}]|[\u{26F5}]|[\u{26FA}]|[\u{26FD}]|[\u{2702}]|[\u{2705}]|[\u{2708}-\u{270D}]|[\u{270F}]|[\u{2712}]|[\u{2714}]|[\u{2716}]|[\u{271D}]|[\u{2721}]|[\u{2728}]|[\u{2733}-\u{2734}]|[\u{2744}]|[\u{2747}]|[\u{274C}]|[\u{274E}]|[\u{2753}-\u{2755}]|[\u{2757}]|[\u{2763}-\u{2764}]|[\u{2795}-\u{2797}]|[\u{27A1}]|[\u{27B0}]|[\u{27BF}]|[\u{2934}-\u{2935}]|[\u{2B05}-\u{2B07}]|[\u{2B1B}-\u{2B1C}]|[\u{2B50}]|[\u{2B55}]|[\u{3030}]|[\u{303D}]|[\u{3297}]|[\u{3299}]/ug;
+
+            if (!emojiRegex.test(emoji)) {
+                showStatus('请输入有效的emoji表情', 'error');
+                return;
+            }
+
+            selectEmoji(emoji);
+            input.value = '';
+            showStatus('已使用自定义emoji: ' + emoji, 'success');
+        }
+
+        // 初始化留言板（从sessionStorage恢复）
+        function initGuestbook() {
+            // 填充emoji网格
+            populateEmojiGrids();
+
+            // 恢复昵称
+            const savedName = sessionStorage.getItem('guestbook_name');
+            if (savedName) {
+                document.getElementById('guestbookName').value = savedName;
+            }
+
+            // 恢复emoji
+            const savedEmoji = sessionStorage.getItem('guestbook_emoji');
+            if (savedEmoji) {
+                document.getElementById('currentEmoji').textContent = savedEmoji;
+            } else {
+                // 默认emoji
+                sessionStorage.setItem('guestbook_emoji', '😃');
+            }
+
+            // 自定义emoji输入框回车事件
+            const customInput = document.getElementById('customEmojiInput');
+            if (customInput) {
+                customInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        applyCustomEmoji();
+                    }
+                });
+            }
+        }
+
+        // Emoji选择器切换
+        function toggleEmojiPicker() {
+            const picker = document.getElementById('emojiPicker');
+            if (picker.style.display === 'none' || picker.style.display === '') {
+                picker.style.display = 'block';
+            } else {
+                picker.style.display = 'none';
+            }
+        }
+
+        // 选择Emoji
+        function selectEmoji(emoji) {
+            document.getElementById('currentEmoji').textContent = emoji;
+            sessionStorage.setItem('guestbook_emoji', emoji);
+            document.getElementById('emojiPicker').style.display = 'none';
+        }
+
+        // 点击其他地方关闭emoji选择器
+        document.addEventListener('click', function(event) {
+            const picker = document.getElementById('emojiPicker');
+            const emojiButton = document.getElementById('currentEmoji');
+            if (picker && emojiButton && !picker.contains(event.target) && !emojiButton.contains(event.target)) {
+                picker.style.display = 'none';
+            }
+        });
+
+        // 更新字符计数
+        function updateCharCount() {
+            const message = document.getElementById('guestbookMessage').value;
+            const count = message.length;
+            document.getElementById('charCount').textContent = `${count}/200`;
+
+            // 超过限制时变红
+            const charCountEl = document.getElementById('charCount');
+            if (count > 200) {
+                charCountEl.style.color = '#dc3545';
+            } else if (count > 180) {
+                charCountEl.style.color = '#ffc107';
+            } else {
+                charCountEl.style.color = '#999';
+            }
+        }
+
+        // 验证中文
+        function containsChinese(text) {
+            return /[\u4e00-\u9fa5]/.test(text);
+        }
+
+        // 加载留言（QQ气泡样式）
+        async function loadGuestbook() {
+            try {
+                const listContainer = document.getElementById('guestbookChatList');
+                listContainer.innerHTML = '<div class="loading">正在加载留言...</div>';
+
+                const response = await fetch('/guestbook/list', {
+                    method: 'GET',
+                    headers: getAuthHeaders()
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    const messages = data.messages || [];
+                    document.getElementById('guestbookCount').textContent = `${messages.length} 条留言`;
+
+                    if (messages.length === 0) {
+                        listContainer.innerHTML = `
+                            <div style="text-align: center; padding: 100px 20px; color: #999;">
+                                <div style="font-size: 64px; margin-bottom: 20px; opacity: 0.6;">💬</div>
+                                <p style="font-size: 16px; margin: 0;">还没有留言，快来发送第一条消息吧！</p>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    // QQ气泡样式 - 反转数组让最新消息在底部
+                    const messagesInOrder = [...messages].reverse();
+                    let html = '';
+                    messagesInOrder.forEach((msg, index) => {
+                        // 根据用户名长度决定左右：单数长度在左，双数长度在右
+                        const isLeft = msg.username.length % 2 === 1;
+                        html += `
+                            <div style="display: flex; ${isLeft ? 'justify-content: flex-start' : 'justify-content: flex-end'}; margin-bottom: 20px; animation: fadeIn 0.3s;">
+                                ${isLeft ? `
+                                    <div style="display: flex; gap: 10px; max-width: 75%;">
+                                        <div style="width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; font-size: 24px; display: flex; align-items: center; justify-content: center;">
+                                            ${msg.emoji || msg.username.charAt(0)}
+                                        </div>
+                                        <div>
+                                            <div style="font-size: 12px; color: #999; margin-bottom: 5px;">
+                                                ${escapeHtml(msg.username)} • ${msg.timestamp}
+                                            </div>
+                                            <div style="background: white; padding: 10px 15px; border-radius: 8px 18px 18px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); word-break: break-word; line-height: 1.5; font-size: 14px; color: #333;">
+                                                ${escapeHtml(msg.message)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ` : `
+                                    <div style="display: flex; gap: 10px; max-width: 75%; flex-direction: row-reverse;">
+                                        <div style="width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; font-size: 24px; display: flex; align-items: center; justify-content: center;">
+                                            ${msg.emoji || msg.username.charAt(0)}
+                                        </div>
+                                        <div>
+                                            <div style="font-size: 12px; color: #999; margin-bottom: 5px; text-align: right;">
+                                                ${msg.timestamp} • ${escapeHtml(msg.username)}
+                                            </div>
+                                            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 10px 15px; border-radius: 18px 8px 18px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); word-break: break-word; line-height: 1.5; font-size: 14px;">
+                                                ${escapeHtml(msg.message)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                `}
+                            </div>
+                        `;
+                    });
+
+                    listContainer.innerHTML = html;
+
+                    // 滚动到底部
+                    listContainer.scrollTop = listContainer.scrollHeight;
+                } else {
+                    listContainer.innerHTML = `
+                        <div style="text-align: center; padding: 60px 20px; color: #dc3545;">
+                            <div style="font-size: 48px; margin-bottom: 15px;">⚠️</div>
+                            <p>加载留言失败: ${data.detail || '未知错误'}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Load guestbook error:', error);
+                const listContainer = document.getElementById('guestbookChatList');
+                listContainer.innerHTML = `
+                    <div style="text-align: center; padding: 60px 20px; color: #dc3545;">
+                        <div style="font-size: 48px; margin-bottom: 15px;">❌</div>
+                        <p>网络错误: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // 提交留言
+        async function submitGuestbook() {
+            const username = document.getElementById('guestbookName').value.trim();
+            const message = document.getElementById('guestbookMessage').value.trim();
+            const emoji = document.getElementById('currentEmoji').textContent;
+
+            // 验证用户名
+            if (!username) {
+                showStatus('请输入您的昵称', 'error');
+                return;
+            }
+
+            if (username.length > 20) {
+                showStatus('昵称最多20个字符', 'error');
+                return;
+            }
+
+            if (!containsChinese(username)) {
+                showStatus('昵称必须包含中文', 'error');
+                return;
+            }
+
+            // 验证留言内容
+            if (!message) {
+                showStatus('请输入留言内容', 'error');
+                return;
+            }
+
+            if (message.length > 200) {
+                showStatus('留言内容最多200个字符', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/guestbook/submit', {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({
+                        username: username,
+                        message: message,
+                        emoji: emoji
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showStatus('✅ 留言发送成功！', 'success');
+
+                    // 保存昵称到sessionStorage
+                    sessionStorage.setItem('guestbook_name', username);
+
+                    // 只清空留言内容，保留昵称和emoji
+                    document.getElementById('guestbookMessage').value = '';
+                    updateCharCount();
+
+                    // 重新加载留言列表
+                    setTimeout(() => loadGuestbook(), 300);
+                } else {
+                    showStatus(`留言发送失败: ${data.detail || '未知错误'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Submit guestbook error:', error);
+                showStatus(`网络错误: ${error.message}`, 'error');
+            }
+        }
+
+        // HTML转义函数
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
         }
     </script>
 </body>

@@ -9,6 +9,7 @@ import json
 import os
 import time
 import zipfile
+import shutil
 from collections import deque
 from typing import List, Optional, Dict, Any
 from urllib.parse import urlparse
@@ -161,10 +162,16 @@ class CredFileActionRequest(BaseModel):
 class CredFileBatchActionRequest(BaseModel):
     action: str  # "enable", "disable", "delete"
     filenames: List[str]  # 批量操作的文件名列表
+    admin_password: Optional[str] = None  # 管理员密码（删除操作时必需）
 
 class ConfigSaveRequest(BaseModel):
     config: dict
+    admin_password: str
 
+class GuestbookSubmitRequest(BaseModel):
+    username: str
+    message: str
+    emoji: Optional[str] = '😃'  # emoji头像，默认笑脸
 
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -172,6 +179,49 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     if not verify_auth_token(credentials.credentials):
         raise HTTPException(status_code=401, detail="无效的认证令牌")
     return credentials.credentials
+
+async def backup_config_before_delete():
+    """
+    在删除凭证文件前备份 config.toml 文件
+    备份格式：creds{数量}_{时间戳}.toml.bak
+    保存路径：creds/backup/
+    """
+    try:
+        # 获取凭证目录
+        credentials_dir = await config.get_credentials_dir()
+
+        # 配置文件路径
+        config_path = os.path.join(credentials_dir, "config.toml")
+        if not os.path.exists(config_path):
+            log.warning(f"Config file not found: {config_path}")
+            return None
+
+        # 备份目录
+        backup_dir = os.path.join(credentials_dir, "backup")
+
+        # 确保备份目录存在
+        os.makedirs(backup_dir, exist_ok=True)
+
+        # 获取当前凭证文件数量
+        storage_adapter = await get_storage_adapter()
+        all_creds = await storage_adapter.list_credentials()
+        creds_count = len(all_creds) if all_creds else 0
+
+        # 生成备份文件名
+        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        backup_filename = f"creds{creds_count}_{timestamp}.toml.bak"
+        backup_path = os.path.join(backup_dir, backup_filename)
+
+        # 复制配置文件
+        shutil.copy2(config_path, backup_path)
+        log.info(f"Config backup created: {backup_path}")
+
+        return backup_path
+
+    except Exception as e:
+        log.error(f"Failed to backup config: {e}")
+        # 备份失败不应该阻止删除操作，只记录错误
+        return None
 
 def is_mobile_user_agent(user_agent: str) -> bool:
     """检测是否为移动设备用户代理"""
@@ -782,11 +832,19 @@ async def creds_action(request: CredFileActionRequest, token: str = Depends(veri
         
         elif action == "delete":
             try:
+                # 在删除前备份配置文件
+                backup_path = await backup_config_before_delete()
+                if backup_path:
+                    log.info(f"Config backed up to: {backup_path}")
+
                 # 使用存储适配器删除凭证
                 success = await storage_adapter.delete_credential(filename)
                 if success:
                     log.info(f"Successfully deleted credential: {filename}")
-                    return JSONResponse(content={"message": f"已删除凭证文件 {os.path.basename(filename)}"})
+                    message = f"已删除凭证文件 {os.path.basename(filename)}"
+                    if backup_path:
+                        message += f"\n配置已备份至: {os.path.basename(backup_path)}"
+                    return JSONResponse(content={"message": message})
                 else:
                     raise HTTPException(status_code=500, detail="删除凭证失败")
             except Exception as e:
@@ -808,18 +866,35 @@ async def creds_batch_action(request: CredFileBatchActionRequest, token: str = D
     """批量对凭证文件执行操作（启用/禁用/删除）"""
     try:
         await ensure_credential_manager_initialized()
-        
+
         action = request.action
         filenames = request.filenames
-        
+
         if not filenames:
             raise HTTPException(status_code=400, detail="文件名列表不能为空")
-        
+
+        backup_info = None  # 初始化备份信息
+
+        # 如果是删除操作，需要验证管理员密码
+        if action == "delete":
+            if not request.admin_password:
+                raise HTTPException(status_code=400, detail="批量删除操作需要管理员密码")
+
+            correct_admin_password = await config.get_admin_password()
+            if request.admin_password != correct_admin_password:
+                raise HTTPException(status_code=403, detail="管理员密码错误")
+
+            # 在批量删除前备份配置文件
+            backup_path = await backup_config_before_delete()
+            backup_info = os.path.basename(backup_path) if backup_path else None
+            if backup_path:
+                log.info(f"Config backed up before batch delete: {backup_path}")
+
         log.info(f"Performing batch action '{action}' on {len(filenames)} files")
-        
+
         success_count = 0
         errors = []
-        
+
         # 获取存储适配器
         storage_adapter = await get_storage_adapter()
         
@@ -869,15 +944,20 @@ async def creds_batch_action(request: CredFileBatchActionRequest, token: str = D
         
         # 构建返回消息
         result_message = f"批量操作完成：成功处理 {success_count}/{len(filenames)} 个文件"
+        if backup_info and action == "delete":
+            result_message += f"\n配置已备份至: {backup_info}"
         if errors:
             result_message += f"\n错误详情：\n" + "\n".join(errors)
-            
+
         response_data = {
             "success_count": success_count,
             "total_count": len(filenames),
             "errors": errors,
             "message": result_message
         }
+
+        if backup_info:
+            response_data["backup_file"] = backup_info
         
         return JSONResponse(content=response_data)
             
@@ -1096,8 +1176,14 @@ async def save_config(request: ConfigSaveRequest, token: str = Depends(verify_to
     """保存配置到TOML文件"""
     try:
         await ensure_credential_manager_initialized()
+
+        # 验证管理员密码
+        correct_admin_password = await config.get_admin_password()
+        if request.admin_password != correct_admin_password:
+            raise HTTPException(status_code=403, detail="管理员密码错误")
+
         new_config = request.config
-        
+
         log.debug(f"收到的配置数据: {list(new_config.keys())}")
         log.debug(f"收到的password值: {new_config.get('password', 'NOT_FOUND')}")
 
@@ -1659,5 +1745,126 @@ async def reset_usage_statistics(request: UsageResetRequest, token: str = Depend
         
     except Exception as e:
         log.error(f"重置使用统计失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 留言板功能 ====================
+
+async def get_guestbook_file_path():
+    """获取留言板JSON文件路径"""
+    credentials_dir = await config.get_credentials_dir()
+    return os.path.join(credentials_dir, "guestbook.json")
+
+async def load_guestbook_data():
+    """加载留言板数据"""
+    guestbook_file = await get_guestbook_file_path()
+
+    if not os.path.exists(guestbook_file):
+        return []
+
+    try:
+        with open(guestbook_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data.get('messages', [])
+    except Exception as e:
+        log.error(f"Failed to load guestbook: {e}")
+        return []
+
+async def save_guestbook_data(messages):
+    """保存留言板数据"""
+    guestbook_file = await get_guestbook_file_path()
+
+    # 确保目录存在
+    os.makedirs(os.path.dirname(guestbook_file), exist_ok=True)
+
+    # 只保留最新的100条留言
+    if len(messages) > 100:
+        messages = messages[-100:]
+
+    data = {
+        'messages': messages,
+        'last_updated': datetime.datetime.now().isoformat()
+    }
+
+    try:
+        with open(guestbook_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        log.error(f"Failed to save guestbook: {e}")
+        return False
+
+@router.get("/guestbook/list")
+async def get_guestbook_list(token: str = Depends(verify_token)):
+    """获取留言板列表"""
+    try:
+        messages = await load_guestbook_data()
+
+        # 返回最新的100条，倒序排列（最新的在前面）
+        messages_reversed = list(reversed(messages[-100:]))
+
+        return JSONResponse(content={
+            "messages": messages_reversed,
+            "count": len(messages_reversed)
+        })
+
+    except Exception as e:
+        log.error(f"获取留言板失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/guestbook/submit")
+async def submit_guestbook(request: GuestbookSubmitRequest, token: str = Depends(verify_token)):
+    """提交留言"""
+    try:
+        username = request.username.strip()
+        message = request.message.strip()
+
+        # 验证用户名
+        if not username:
+            raise HTTPException(status_code=400, detail="用户名不能为空")
+
+        if len(username) > 20:
+            raise HTTPException(status_code=400, detail="用户名最多20个字符")
+
+        # 验证是否包含中文
+        import re
+        if not re.search(r'[\u4e00-\u9fa5]', username):
+            raise HTTPException(status_code=400, detail="用户名必须包含中文")
+
+        # 验证留言内容
+        if not message:
+            raise HTTPException(status_code=400, detail="留言内容不能为空")
+
+        if len(message) > 200:
+            raise HTTPException(status_code=400, detail="留言内容最多200个字符")
+
+        # 加载现有留言
+        messages = await load_guestbook_data()
+
+        # 创建新留言
+        new_message = {
+            'username': username,
+            'message': message,
+            'emoji': request.emoji or '😃',
+            'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+
+        # 添加到列表
+        messages.append(new_message)
+
+        # 保存
+        if await save_guestbook_data(messages):
+            log.info(f"New guestbook message from {username}")
+            return JSONResponse(content={
+                "success": True,
+                "message": "留言发布成功"
+            })
+        else:
+            raise HTTPException(status_code=500, detail="保存留言失败")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"提交留言失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 

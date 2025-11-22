@@ -302,7 +302,7 @@ async def get_api_password() -> str:
 async def get_panel_password() -> str:
     """
     Get panel password setting for web interface.
-    
+
     Environment variable: PANEL_PASSWORD
     TOML config key: panel_password
     Default: Uses PASSWORD env var for compatibility, otherwise 'pwd'
@@ -311,9 +311,20 @@ async def get_panel_password() -> str:
     panel_password = await get_config_value("panel_password", None, "PANEL_PASSWORD")
     if panel_password is not None:
         return str(panel_password)
-    
+
     # 兼容性：使用通用密码
     return str(await get_config_value("password", "pwd", "PASSWORD"))
+
+async def get_admin_password() -> str:
+    """
+    Get admin password setting for config management.
+
+    Environment variable: ADMIN_PASSWORD
+    TOML config key: admin_password
+    Default: adm123
+    """
+    admin_password = await get_config_value("admin_password", "adm123", "ADMIN_PASSWORD")
+    return str(admin_password)
 
 async def get_server_password() -> str:
     """
