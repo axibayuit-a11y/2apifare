@@ -4659,7 +4659,7 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
                 <div class="ip-info">
                     <div class="ip-info-item">
                         <span class="ip-info-label">📍 地理位置</span>
-                        <span class="ip-info-value" id="location-${ip}">${stats.location || '未知位置'}</span>
+                        <span class="ip-info-value" id="location-${getSafeIPId(ip)}">${stats.location || '未知位置'}</span>
                         ${(stats.location === '未知位置' || !stats.location) ? `<button class="ip-btn" style="margin-left: 10px; padding: 2px 8px; font-size: 12px;" onclick="refreshIPLocation('${ip}')">🔄 查询</button>` : ''}
                     </div>
                     <div class="ip-info-item">
@@ -4775,12 +4775,17 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
             }
         }
 
+        // 生成安全的 IP ID（替换点号为下划线）
+        function getSafeIPId(ip) {
+            return ip.replace(/\./g, '_').replace(/:/g, '_');
+        }
+
         // 刷新 IP 地理位置
         async function refreshIPLocation(ip) {
             try {
-                showStatus(`正在查询 ${ip} 的地理位置...`, 'info');
+                showStatus(`正在查询地理位置...`, 'info');
                 
-                const response = await fetch(`/ip/refresh-location/${ip}`, {
+                const response = await fetch(`/ip/refresh-location/${encodeURIComponent(ip)}`, {
                     method: 'POST',
                     headers: getAuthHeaders()
                 });
@@ -4789,11 +4794,12 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
 
                 if (response.ok) {
                     // 更新页面显示
-                    const locationElement = document.getElementById(`location-${ip}`);
+                    const safeId = getSafeIPId(ip);
+                    const locationElement = document.getElementById(`location-${safeId}`);
                     if (locationElement) {
                         locationElement.textContent = data.location || '未知位置';
                     }
-                    showStatus(`已更新 ${ip} 的地理位置：${data.location}`, 'success');
+                    showStatus(`已更新地理位置：${data.location}`, 'success');
                     
                     // 刷新整个列表以更新按钮状态
                     setTimeout(() => refreshIPStats(), 1000);
