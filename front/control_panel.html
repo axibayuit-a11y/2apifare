@@ -1632,6 +1632,12 @@
                     <div id="ipListSection">
                         <div class="loading" id="ipLoading">正在加载 IP 统计...</div>
                         <div id="ipList"></div>
+                        <!-- 分页控制 -->
+                        <div id="ipPagination" style="display: none; text-align: center; margin-top: 20px;">
+                            <button class="btn" onclick="loadPreviousPage()" id="prevPageBtn" disabled>上一页</button>
+                            <span id="pageInfo" style="margin: 0 20px; color: #666;">第 1 页 / 共 1 页</span>
+                            <button class="btn" onclick="loadNextPage()" id="nextPageBtn">下一页</button>
+                        </div>
                     </div>
 
                     <!-- 测试娱乐功能说明 -->
@@ -4458,6 +4464,11 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
             }
         }
 
+        // IP 分页相关变量
+        let allIPsData = {};
+        let currentPage = 1;
+        const itemsPerPage = 20;
+
         // 刷新 IP 统计
         async function refreshIPStats() {
             const ipLoading = document.getElementById('ipLoading');
@@ -4490,8 +4501,12 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
                     document.getElementById('rateLimitedIPs').textContent = summaryData.data.rate_limited_ips || 0;
                     document.getElementById('totalIPRequests').textContent = summaryData.data.total_requests || 0;
 
-                    // 渲染 IP 列表
-                    renderIPList(statsData.data);
+                    // 保存所有 IP 数据
+                    allIPsData = statsData.data || {};
+                    currentPage = 1;
+
+                    // 渲染第一页
+                    renderIPList();
 
                     showStatus(`已加载 ${summaryData.data.total_ips} 个 IP 的统计数据`, 'success');
                 } else {
@@ -4505,20 +4520,60 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
             }
         }
 
-        // 渲染 IP 列表
-        function renderIPList(ipsData) {
+        // 渲染 IP 列表（带分页）
+        function renderIPList() {
             const ipList = document.getElementById('ipList');
+            const pagination = document.getElementById('ipPagination');
             ipList.innerHTML = '';
 
-            if (!ipsData || Object.keys(ipsData).length === 0) {
+            if (!allIPsData || Object.keys(allIPsData).length === 0) {
                 ipList.innerHTML = '<p style="text-align: center; color: #666;">暂无 IP 统计数据</p>';
+                pagination.style.display = 'none';
                 return;
             }
 
-            // 按请求次数排序（已经在后端排序）
-            for (const [ip, stats] of Object.entries(ipsData)) {
+            // 转换为数组并分页
+            const ipsArray = Object.entries(allIPsData);
+            const totalPages = Math.ceil(ipsArray.length / itemsPerPage);
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            const currentPageData = ipsArray.slice(startIndex, endIndex);
+
+            // 渲染当前页的 IP 卡片
+            for (const [ip, stats] of currentPageData) {
                 const card = createIPCard(ip, stats);
                 ipList.appendChild(card);
+            }
+
+            // 更新分页控制
+            if (totalPages > 1) {
+                pagination.style.display = 'block';
+                document.getElementById('pageInfo').textContent = `第 ${currentPage} 页 / 共 ${totalPages} 页 (共 ${ipsArray.length} 个 IP)`;
+                document.getElementById('prevPageBtn').disabled = currentPage === 1;
+                document.getElementById('nextPageBtn').disabled = currentPage === totalPages;
+            } else {
+                pagination.style.display = 'none';
+            }
+        }
+
+        // 加载上一页
+        function loadPreviousPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                renderIPList();
+                // 滚动到列表顶部
+                document.getElementById('ipListSection').scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        // 加载下一页
+        function loadNextPage() {
+            const totalPages = Math.ceil(Object.keys(allIPsData).length / itemsPerPage);
+            if (currentPage < totalPages) {
+                currentPage++;
+                renderIPList();
+                // 滚动到列表顶部
+                document.getElementById('ipListSection').scrollIntoView({ behavior: 'smooth' });
             }
         }
 
@@ -4582,7 +4637,8 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
                 <div class="ip-info">
                     <div class="ip-info-item">
                         <span class="ip-info-label">📍 地理位置</span>
-                        <span class="ip-info-value">${stats.location || '未知'}</span>
+                        <span class="ip-info-value" id="location-${ip}">${stats.location || '未知位置'}</span>
+                        ${(stats.location === '未知位置' || !stats.location) ? `<button class="ip-btn" style="margin-left: 10px; padding: 2px 8px; font-size: 12px;" onclick="refreshIPLocation('${ip}')">🔄 查询</button>` : ''}
                     </div>
                     <div class="ip-info-item">
                         <span class="ip-info-label">📊 总请求数</span>
@@ -4693,6 +4749,37 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
                 }
             } catch (error) {
                 console.error('setIPStatus error:', error);
+                showStatus(`网络错误: ${error.message}`, 'error');
+            }
+        }
+
+        // 刷新 IP 地理位置
+        async function refreshIPLocation(ip) {
+            try {
+                showStatus(`正在查询 ${ip} 的地理位置...`, 'info');
+                
+                const response = await fetch(`/ip/refresh-location/${ip}`, {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // 更新页面显示
+                    const locationElement = document.getElementById(`location-${ip}`);
+                    if (locationElement) {
+                        locationElement.textContent = data.location || '未知位置';
+                    }
+                    showStatus(`已更新 ${ip} 的地理位置：${data.location}`, 'success');
+                    
+                    // 刷新整个列表以更新按钮状态
+                    setTimeout(() => refreshIPStats(), 1000);
+                } else {
+                    showStatus(`查询失败: ${data.detail || '未知错误'}`, 'error');
+                }
+            } catch (error) {
+                console.error('refreshIPLocation error:', error);
                 showStatus(`网络错误: ${error.message}`, 'error');
             }
         }

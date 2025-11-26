@@ -1972,6 +1972,37 @@ async def get_ip_summary(token: str = Depends(verify_token)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/ip/refresh-location/{ip}")
+async def refresh_ip_location(ip: str, token: str = Depends(verify_token)):
+    """
+    刷新指定 IP 的地理位置信息
+
+    Args:
+        ip: IP 地址
+
+    Returns:
+        更新后的位置信息
+    """
+    try:
+        from .ip_manager import get_ip_manager
+
+        ip_manager = await get_ip_manager()
+        
+        # 重新查询位置
+        location = await ip_manager._get_ip_location(ip)
+        
+        # 更新到缓存
+        async with ip_manager._cache_lock:
+            if "ips" in ip_manager._ip_cache and ip in ip_manager._ip_cache["ips"]:
+                ip_manager._ip_cache["ips"][ip]["location"] = location
+                ip_manager._cache_dirty = True
+        
+        return JSONResponse(content={"success": True, "location": location})
+    except Exception as e:
+        log.error(f"刷新 IP 位置失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class IPStatusUpdateRequest(BaseModel):
     ip: str
     status: str  # active, banned, rate_limited
