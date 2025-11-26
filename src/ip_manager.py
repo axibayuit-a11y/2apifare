@@ -10,12 +10,15 @@ IP 管理器模块
 import asyncio
 import time
 from typing import Dict, Any, Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import aiofiles
 import toml
 import os
 
 from log import log
+
+# 东八区时区
+UTC_PLUS_8 = timezone(timedelta(hours=8))
 
 
 class IPManager:
@@ -119,7 +122,7 @@ class IPManager:
                     # 24小时 = 86400秒
                     if banned_time > 0 and (current_time - banned_time) >= 86400:
                         ip_data["status"] = "active"
-                        ip_data["auto_unbanned_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        ip_data["auto_unbanned_time"] = datetime.now(UTC_PLUS_8).strftime("%Y-%m-%d %H:%M:%S")
                         unban_count += 1
                         log.info(f"Auto-unbanned IP {ip} after 24 hours")
 
@@ -158,7 +161,7 @@ class IPManager:
                     if banned_time > 0 and (time.time() - banned_time) >= 86400:
                         # 自动解封
                         ip_data["status"] = "active"
-                        ip_data["auto_unbanned_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        ip_data["auto_unbanned_time"] = datetime.now(UTC_PLUS_8).strftime("%Y-%m-%d %H:%M:%S")
                         self._cache_dirty = True
                         log.info(f"Auto-unbanned IP {ip} after 24 hours")
                     else:
@@ -218,7 +221,7 @@ class IPManager:
             # 初始化或更新 IP 数据
             if ip not in self._ip_cache["ips"]:
                 self._ip_cache["ips"][ip] = {
-                    "first_seen": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "first_seen": datetime.now(UTC_PLUS_8).strftime("%Y-%m-%d %H:%M:%S"),
                     "total_requests": 0,
                     "status": "active",  # active, banned, rate_limited
                     "location": await self._get_ip_location(ip),
@@ -232,7 +235,7 @@ class IPManager:
             # 更新统计
             ip_data["total_requests"] = ip_data.get("total_requests", 0) + 1
             ip_data["last_request_time"] = time.time()
-            ip_data["last_seen"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            ip_data["last_seen"] = datetime.now(UTC_PLUS_8).strftime("%Y-%m-%d %H:%M:%S")
 
             # 记录 User-Agent
             if user_agent and user_agent not in ip_data.get("user_agents", []):
@@ -404,7 +407,7 @@ class IPManager:
             if ip not in self._ip_cache["ips"]:
                 # 如果 IP 不存在，创建新记录
                 self._ip_cache["ips"][ip] = {
-                    "first_seen": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "first_seen": datetime.now(UTC_PLUS_8).strftime("%Y-%m-%d %H:%M:%S"),
                     "total_requests": 0,
                     "location": await self._get_ip_location(ip),
                 }
@@ -414,7 +417,7 @@ class IPManager:
             # 如果是封禁操作，记录封禁时间
             if status == "banned":
                 self._ip_cache["ips"][ip]["banned_time"] = time.time()
-                self._ip_cache["ips"][ip]["banned_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                self._ip_cache["ips"][ip]["banned_at"] = datetime.now(UTC_PLUS_8).strftime("%Y-%m-%d %H:%M:%S")
 
             if status == "rate_limited" and rate_limit_seconds:
                 self._ip_cache["ips"][ip]["rate_limit_seconds"] = rate_limit_seconds
