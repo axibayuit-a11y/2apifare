@@ -126,6 +126,10 @@ class CredsBackup:
             except:
                 self._run_git_command(["git", "checkout", "-b", "main"])
 
+        # 配置 git 用户信息（每次都配置，确保 commit 不会失败）
+        self._run_git_command(["git", "config", "user.name", "Auto Backup Bot"])
+        self._run_git_command(["git", "config", "user.email", "backup@2apifare.local"])
+
     def _create_backup_path(self, china_time):
         """创建备份路径：年/月/日/时"""
         year = china_time.strftime("%Y")
