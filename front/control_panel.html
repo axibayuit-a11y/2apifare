@@ -7735,29 +7735,33 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
                 }
             }
 
-            // GeminiCLI Pro Series
+            // GeminiCLI - 分为3个独立组
             if (data.geminicli && Object.keys(data.geminicli).length > 0) {
-                const proModels = [];
-                const flashModels = [];
+                const proStandardModels = [];  // 标准 2.5-pro（不含 preview-06-05）
+                const proPreviewModels = [];   // preview-06-05 系列
+                const flashModels = [];        // flash 系列
 
                 for (const [name, score] of Object.entries(data.geminicli)) {
                     const model = { name, score, desc: getModelDescription(name) };
-                    if (name.includes('pro')) {
-                        proModels.push(model);
-                    } else {
+
+                    if (name.includes('pro-preview-06-05')) {
+                        proPreviewModels.push(model);
+                    } else if (name.includes('pro')) {
+                        proStandardModels.push(model);
+                    } else if (name.includes('flash')) {
                         flashModels.push(model);
                     }
                 }
 
-                // Pro 系列
-                if (proModels.length > 0) {
-                    proModels.sort((a, b) => b.score - a.score);
+                // 第一排：标准 Pro 系列
+                if (proStandardModels.length > 0) {
+                    proStandardModels.sort((a, b) => b.score - a.score);
                     html += `<div class="group-header" data-tier="3">
                         <span>GEMINICLI / PRO SERIES</span>
                         <span>TIER 3</span>
                     </div>`;
 
-                    for (const model of proModels) {
+                    for (const model of proStandardModels) {
                         html += `<div class="model-row">
                             <div class="row-info">
                                 <span class="row-name">${model.name}</span>
@@ -7770,12 +7774,33 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
                     html += '<br>';
                 }
 
-                // Flash 系列
+                // 第二排：Preview 06-05 系列
+                if (proPreviewModels.length > 0) {
+                    proPreviewModels.sort((a, b) => b.score - a.score);
+                    html += `<div class="group-header" data-tier="4">
+                        <span>GEMINICLI / PRO PREVIEW 06-05</span>
+                        <span>TIER 4</span>
+                    </div>`;
+
+                    for (const model of proPreviewModels) {
+                        html += `<div class="model-row">
+                            <div class="row-info">
+                                <span class="row-name">${model.name}</span>
+                                <span class="row-desc">${model.desc}</span>
+                            </div>
+                            <div class="row-score">${model.score.toFixed(2)}</div>
+                        </div>`;
+                    }
+
+                    html += '<br>';
+                }
+
+                // 第三排：Flash 系列
                 if (flashModels.length > 0) {
                     flashModels.sort((a, b) => b.score - a.score);
-                    html += `<div class="group-header" data-tier="4">
+                    html += `<div class="group-header" data-tier="5">
                         <span>GEMINICLI / FLASH SERIES</span>
-                        <span>TIER 4</span>
+                        <span>TIER 5</span>
                     </div>`;
 
                     for (const model of flashModels) {
@@ -7809,10 +7834,15 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
             if (name.includes('gpt-oss-120b')) return 'Open Source 120B · General Purpose';
             if (name.includes('rev19-uic3')) return 'Experimental · Legacy Support';
 
-            // GeminiCLI Pro
+            // GeminiCLI Pro - Preview 06-05 系列（更具体的匹配放前面）
+            if (name.includes('2.5-pro-preview-06-05-search')) return 'Preview Search · Enhanced RAG';
+            if (name.includes('2.5-pro-preview-06-05-maxthinking')) return 'Preview Extended Reasoning';
+            if (name.includes('2.5-pro-preview-06-05-nothinking')) return 'Preview Fast Response';
+            if (name.includes('2.5-pro-preview-06-05')) return 'Preview Release · Stable Build';
+
+            // GeminiCLI Pro - 标准系列
             if (name.includes('2.5-pro-search')) return 'Active Retrieval Generation';
             if (name.includes('2.5-pro-maxthinking')) return 'Extended Context Processing';
-            if (name.includes('2.5-pro-preview')) return 'Preview Release · Stable Build';
             if (name.includes('2.5-pro-nothinking')) return 'Direct Response · Zero CoT';
             if (name.includes('2.5-pro') && !name.includes('search') && !name.includes('thinking') && !name.includes('preview')) return 'Best Value · Standard Pro';
 

@@ -34,6 +34,8 @@ class IPManager:
         self._ban_operations_file = None
         # 限速恢复时间戳（每3小时恢复一次）
         self._last_rate_limit_recovery_time = 0
+        # 默认积分值（从配置文件加载）
+        self._default_credit_score = 0.5  # 初始默认值，会在initialize中从配置文件读取
 
     async def initialize(self):
         """初始化 IP 管理器"""
@@ -49,6 +51,9 @@ class IPManager:
 
             # 加载 IP 数据
             await self._load_ip_data()
+
+            # 加载默认积分配置
+            await self._load_default_credit_score(credentials_dir)
 
             # 启动定期保存任务
             asyncio.create_task(self._periodic_save())
@@ -77,6 +82,21 @@ class IPManager:
         except Exception as e:
             log.error(f"Error loading IP data: {e}")
             self._ip_cache = {"ips": {}}
+
+    async def _load_default_credit_score(self, credentials_dir: str):
+        """从配置文件加载默认积分值"""
+        try:
+            credits_toml_file = os.path.join(credentials_dir, "model_credits.toml")
+            if os.path.exists(credits_toml_file):
+                async with aiofiles.open(credits_toml_file, "r", encoding="utf-8") as f:
+                    content = await f.read()
+                credits_data = toml.loads(content)
+                self._default_credit_score = credits_data.get("default", {}).get("score", 0.5)
+                log.info(f"Loaded default credit score: {self._default_credit_score}")
+            else:
+                log.warning(f"Model credits file not found, using default: {self._default_credit_score}")
+        except Exception as e:
+            log.error(f"Error loading default credit score: {e}, using default: {self._default_credit_score}")
 
     async def _save_ip_data(self):
         """保存 IP 数据到文件"""
@@ -629,15 +649,15 @@ class IPManager:
             # 读取模型积分配置
             import toml
             import os
-            from .config import config
+            from config import get_credentials_dir
 
-            credentials_dir = await config.get_credentials_dir()
+            credentials_dir = await get_credentials_dir()
             credits_toml_file = os.path.join(credentials_dir, "model_credits.toml")
 
             if not os.path.exists(credits_toml_file):
                 log.warning(f"Model credits file not found: {credits_toml_file}")
-                # 如果文件不存在，按每次请求0.4积分估算
-                return self._ip_cache.get("ips", {}).get(ip, {}).get("today_requests", 0) * 0.4
+                # 如果文件不存在，使用默认积分估算
+                return self._ip_cache.get("ips", {}).get(ip, {}).get("today_requests", 0) * self._default_credit_score
 
             with open(credits_toml_file, "r", encoding="utf-8") as f:
                 credits_data = toml.load(f)
@@ -651,30 +671,38 @@ class IPManager:
                 return 0.0
 
             total_credits = 0.0
-            default_score = credits_data.get("default", {}).get("score", 0.4)
+            default_score = credits_data.get("default", {}).get("score", self._default_credit_score)
+
+            # 打印TOML中的所有模型键（调试用）
+            log.debug(f"=== Credit Calculation Debug for IP {ip} ===")
+            log.debug(f"TOML antigravity models: {list(credits_data.get('antigravity', {}).keys())}")
+            log.debug(f"TOML geminicli models: {list(credits_data.get('geminicli', {}).keys())}")
+            log.debug(f"IP models_used: {list(models_used.keys())}")
 
             # 累加每个模型的积分
             for model_name, count in models_used.items():
                 # 先在antigravity组查找
                 if "antigravity" in credits_data and model_name in credits_data["antigravity"]:
                     score = credits_data["antigravity"][model_name]
+                    log.debug(f"✓ Found '{model_name}' in antigravity: {score} × {count} = {score * count}")
                 # 再在geminicli组查找
                 elif "geminicli" in credits_data and model_name in credits_data["geminicli"]:
                     score = credits_data["geminicli"][model_name]
+                    log.debug(f"✓ Found '{model_name}' in geminicli: {score} × {count} = {score * count}")
                 # 使用默认积分
                 else:
                     score = default_score
-                    log.debug(f"Model {model_name} not found in credits config, using default {default_score}")
+                    log.warning(f"✗ Model '{model_name}' not found in TOML, using default {default_score} × {count} = {score * count}")
 
                 total_credits += score * count
 
-            log.debug(f"IP {ip} today credits: {total_credits:.2f} from {len(models_used)} models")
+            log.info(f"IP {ip} today credits: {total_credits:.2f} from {len(models_used)} models")
             return total_credits
 
         except Exception as e:
             log.error(f"Error calculating IP credits: {e}")
-            # 出错时使用today_requests * 0.4作为后备
-            return self._ip_cache.get("ips", {}).get(ip, {}).get("today_requests", 0) * 0.4
+            # 出错时使用默认积分作为后备
+            return self._ip_cache.get("ips", {}).get(ip, {}).get("today_requests", 0) * self._default_credit_score
 
     async def _check_ban_operation_limit(self, operator_ip: str) -> tuple[bool, str]:
         """
