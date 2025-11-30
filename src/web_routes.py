@@ -57,6 +57,35 @@ security = HTTPBearer()
 # 创建credential manager实例
 credential_manager = CredentialManager()
 
+
+def get_client_ip(request: Request) -> str:
+    """
+    获取客户端真实 IP 地址（支持反向代理）
+
+    优先级：
+    1. X-Forwarded-For 头（反向代理传递的真实 IP）
+    2. X-Real-IP 头（Nginx 等代理传递的真实 IP）
+    3. request.client.host（直连 IP，Docker 环境下可能是内部 IP）
+
+    Args:
+        request: FastAPI Request 对象
+
+    Returns:
+        客户端 IP 地址字符串
+    """
+    # 检查 X-Forwarded-For 头（可能包含多个 IP，取第一个）
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+
+    # 检查 X-Real-IP 头
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip.strip()
+
+    # 回退到直连 IP
+    return request.client.host if request.client else "unknown"
+
 # WebSocket连接管理
 
 
@@ -2206,8 +2235,8 @@ async def update_ip_status(
 
         ip_manager = await get_ip_manager()
 
-        # 获取操作者IP地址
-        operator_ip = http_request.client.host if http_request.client else None
+        # 获取操作者IP地址（支持反向代理）
+        operator_ip = get_client_ip(http_request)
 
         # 启用 IP 需要验证管理员密码
         if req.status == "active":
