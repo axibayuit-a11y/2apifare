@@ -1196,90 +1196,92 @@ class FileStorageManager:
         """保存 Antigravity accounts.toml（包含数据验证和原子写入保护）"""
         self._ensure_initialized()
 
-        try:
-            accounts_file = os.path.join(self._credentials_dir, "accounts.toml")
+        # [CRITICAL FIX] 使用锁防止并发写入冲突
+        async with self._lock:
+            try:
+                accounts_file = os.path.join(self._credentials_dir, "accounts.toml")
 
-            # [CRITICAL FIX 1] 验证数据结构
-            if not accounts_data or not isinstance(accounts_data, dict):
-                log.error("[CRITICAL] Invalid accounts_data: not a dict, refusing to save!")
-                return False
-
-            if 'accounts' not in accounts_data:
-                log.error("[CRITICAL] Invalid accounts_data: missing 'accounts' key, refusing to save!")
-                return False
-
-            if not isinstance(accounts_data['accounts'], list):
-                log.error("[CRITICAL] Invalid accounts_data: 'accounts' is not a list, refusing to save!")
-                return False
-
-            new_account_count = len(accounts_data['accounts'])
-
-            # [CRITICAL FIX 2] 防止用空数据覆盖现有非空文件
-            if new_account_count == 0 and os.path.exists(accounts_file):
-                # 读取现有文件检查是否有数据
-                try:
-                    async with aiofiles.open(accounts_file, "r", encoding="utf-8") as f:
-                        existing_content = await f.read()
-                    if existing_content.strip():
-                        existing_data = toml.loads(existing_content)
-                        existing_count = len(existing_data.get('accounts', []))
-                        if existing_count > 0:
-                            log.error(f"[CRITICAL] Refusing to overwrite {existing_count} existing accounts with empty list!")
-                            log.error(f"[CRITICAL] This would cause data loss! Check your code logic!")
-                            return False
-                except Exception as e:
-                    log.warning(f"Could not verify existing file content: {e}")
-                    # 如果无法读取现有文件，为了安全起见也拒绝写入空数据
-                    log.error(f"[CRITICAL] Cannot verify existing data, refusing to write empty accounts for safety!")
+                # [CRITICAL FIX 1] 验证数据结构
+                if not accounts_data or not isinstance(accounts_data, dict):
+                    log.error("[CRITICAL] Invalid accounts_data: not a dict, refusing to save!")
                     return False
 
-            # 转换为 TOML 格式
-            toml_content = toml.dumps(accounts_data)
+                if 'accounts' not in accounts_data:
+                    log.error("[CRITICAL] Invalid accounts_data: missing 'accounts' key, refusing to save!")
+                    return False
 
-            # [CRITICAL FIX 3] 原子写入：写入临时文件然后重命名
-            temp_file = f"{accounts_file}.tmp"
-            try:
-                # 写入临时文件
-                async with aiofiles.open(temp_file, "w", encoding="utf-8") as f:
-                    await f.write(toml_content)
+                if not isinstance(accounts_data['accounts'], list):
+                    log.error("[CRITICAL] Invalid accounts_data: 'accounts' is not a list, refusing to save!")
+                    return False
 
-                # 原子性重命名（Windows 需要先删除目标文件）
-                if os.path.exists(accounts_file):
-                    # 创建备份（以防重命名失败）
-                    backup_file = f"{accounts_file}.backup"
-                    import shutil
-                    shutil.copy2(accounts_file, backup_file)
+                new_account_count = len(accounts_data['accounts'])
+
+                # [CRITICAL FIX 2] 防止用空数据覆盖现有非空文件
+                if new_account_count == 0 and os.path.exists(accounts_file):
+                    # 读取现有文件检查是否有数据
                     try:
-                        os.replace(temp_file, accounts_file)
-                        # 成功后删除备份
-                        if os.path.exists(backup_file):
-                            os.remove(backup_file)
+                        async with aiofiles.open(accounts_file, "r", encoding="utf-8") as f:
+                            existing_content = await f.read()
+                        if existing_content.strip():
+                            existing_data = toml.loads(existing_content)
+                            existing_count = len(existing_data.get('accounts', []))
+                            if existing_count > 0:
+                                log.error(f"[CRITICAL] Refusing to overwrite {existing_count} existing accounts with empty list!")
+                                log.error(f"[CRITICAL] This would cause data loss! Check your code logic!")
+                                return False
                     except Exception as e:
-                        # 恢复备份
-                        log.error(f"[CRITICAL] Failed to rename temp file, restoring backup: {e}")
-                        if os.path.exists(backup_file):
-                            shutil.copy2(backup_file, accounts_file)
-                            os.remove(backup_file)
-                        raise
-                else:
-                    os.rename(temp_file, accounts_file)
+                        log.warning(f"Could not verify existing file content: {e}")
+                        # 如果无法读取现有文件，为了安全起见也拒绝写入空数据
+                        log.error(f"[CRITICAL] Cannot verify existing data, refusing to write empty accounts for safety!")
+                        return False
 
-            finally:
-                # 清理临时文件
-                if os.path.exists(temp_file):
-                    try:
-                        os.remove(temp_file)
-                    except:
-                        pass
+                # 转换为 TOML 格式
+                toml_content = toml.dumps(accounts_data)
 
-            log.debug(f"Saved {new_account_count} Antigravity accounts (atomic write)")
-            return True
+                # [CRITICAL FIX 3] 原子写入：写入临时文件然后重命名
+                temp_file = f"{accounts_file}.tmp"
+                try:
+                    # 写入临时文件
+                    async with aiofiles.open(temp_file, "w", encoding="utf-8") as f:
+                        await f.write(toml_content)
 
-        except Exception as e:
-            log.error(f"[CRITICAL] Error saving Antigravity accounts: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
+                    # 原子性重命名（Windows 需要先删除目标文件）
+                    if os.path.exists(accounts_file):
+                        # 创建备份（以防重命名失败）
+                        backup_file = f"{accounts_file}.backup"
+                        import shutil
+                        shutil.copy2(accounts_file, backup_file)
+                        try:
+                            os.replace(temp_file, accounts_file)
+                            # 成功后删除备份
+                            if os.path.exists(backup_file):
+                                os.remove(backup_file)
+                        except Exception as e:
+                            # 恢复备份
+                            log.error(f"[CRITICAL] Failed to rename temp file, restoring backup: {e}")
+                            if os.path.exists(backup_file):
+                                shutil.copy2(backup_file, accounts_file)
+                                os.remove(backup_file)
+                            raise
+                    else:
+                        os.rename(temp_file, accounts_file)
+
+                finally:
+                    # 清理临时文件
+                    if os.path.exists(temp_file):
+                        try:
+                            os.remove(temp_file)
+                        except:
+                            pass
+
+                log.debug(f"Saved {new_account_count} Antigravity accounts (atomic write)")
+                return True
+
+            except Exception as e:
+                log.error(f"[CRITICAL] Error saving Antigravity accounts: {e}")
+                import traceback
+                traceback.print_exc()
+                return False
 
     # ============ 工具方法 ============
 
