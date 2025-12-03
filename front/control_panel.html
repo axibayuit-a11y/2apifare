@@ -7907,7 +7907,7 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
                     m.name.includes('gemini-3-pro') || m.name.includes('claude-sonnet-4-5')
                 );
                 const liteModels = antigravityModels.filter(m =>
-                    m.name.includes('flash') || m.name.includes('gpt-oss') || m.name.includes('rev19')
+                    m.name.includes('flash') || m.name.includes('gpt-oss') || m.name.includes('rev19') || m.name.includes('computer-use')
                 );
 
                 // ANTIGRAVITY / CORE - TIER 1
@@ -8098,8 +8098,8 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
             if (name.includes('gemini-2.5-flash-thinking')) return 'Lightweight Reasoning Model';
             if (name.includes('gemini-2.5-flash-lite')) return 'Ultra Low Cost · Basic Tasks';
             if (name.includes('gemini-2.5-flash') && !name.includes('lite') && !name.includes('thinking')) return 'Speed Optimized · Cost Effective';
+            if (name.includes('gemini-2.5-computer-use')) return 'Computer Use · Screen Control';
             if (name.includes('gpt-oss-120b')) return 'Open Source 120B · General Purpose';
-            if (name.includes('rev19-uic3')) return 'Experimental · Legacy Support';
 
             // GeminiCLI Gemini 3 Pro Preview 系列（最新CLI模型）
             if (name.includes('gemini-3-pro-preview-maxthinking')) return 'CLI 3.0 · Extended Reasoning';
