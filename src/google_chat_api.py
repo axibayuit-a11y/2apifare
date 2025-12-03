@@ -372,6 +372,16 @@ async def send_gemini_request(
                             pass
                         await client.aclose()
 
+                        # 5xx 服务器错误：不切换凭证，直接等待重试
+                        if 500 <= resp.status_code < 600 and attempt < max_retries:
+                            # 指数退避：base_delay * 2^attempt (1.5s, 3s, 6s, 12s...)
+                            delay = retry_interval * (2 ** attempt)
+                            log.warning(
+                                f"[RETRY] Server error {resp.status_code}, waiting {delay:.1f}s before retry ({attempt + 1}/{max_retries})"
+                            )
+                            await asyncio.sleep(delay)
+                            continue  # 使用同一凭证重试
+
                         # 检查是否是自动封禁错误码（403, 401等）且可以重试
                         should_auto_ban = await _check_should_auto_ban(resp.status_code)
 
@@ -494,6 +504,16 @@ async def send_gemini_request(
                     else:
                         # 非429错误或成功响应，检查是否需要重试
                         if resp.status_code != 200:
+                            # 5xx 服务器错误：不切换凭证，直接等待重试
+                            if 500 <= resp.status_code < 600 and attempt < max_retries:
+                                # 指数退避：base_delay * 2^attempt (1.5s, 3s, 6s, 12s...)
+                                delay = retry_interval * (2 ** attempt)
+                                log.warning(
+                                    f"[RETRY] Server error {resp.status_code}, waiting {delay:.1f}s before retry ({attempt + 1}/{max_retries})"
+                                )
+                                await asyncio.sleep(delay)
+                                continue  # 使用同一凭证重试
+
                             # 检查是否是自动封禁错误码（403, 401等）
                             should_auto_ban = await _check_should_auto_ban(resp.status_code)
 

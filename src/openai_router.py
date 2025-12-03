@@ -773,6 +773,14 @@ async def handle_antigravity_request(request_data: ChatCompletionRequest):
                         if error_code and credential_result:
                             await ant_cred_mgr.mark_credential_error(virtual_filename, error_code, error_message)
 
+                        # 5xx 服务器错误：不切换凭证，直接等待重试
+                        if error_code and 500 <= error_code < 600 and attempt < max_retries - 1:
+                            base_delay = 1.5
+                            delay = base_delay * (2 ** attempt)
+                            log.warning(f"[RETRY] Server error {error_code}, waiting {delay:.1f}s before retry ({attempt + 1}/{max_retries})")
+                            await asyncio.sleep(delay)
+                            continue  # 使用同一凭证重试
+
                         # 检查是否需要重试（使用辅助函数）
                         should_retry = await _check_should_retry_antigravity(error_code, auto_ban_error_codes)
 
