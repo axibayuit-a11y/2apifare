@@ -206,8 +206,6 @@ BASE_MODELS = [
     "gemini-2.5-pro",
     "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
-    "gemini-flash-latest",
-    "gemini-flash-lite-latest",
 ]
 
 PUBLIC_API_MODELS = ["gemini-2.5-flash-image", "gemini-2.5-flash-image-preview"]

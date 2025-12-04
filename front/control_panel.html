@@ -7957,20 +7957,14 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
             if (data.geminicli && Object.keys(data.geminicli).length > 0) {
                 const gemini3ProModels = [];   // Gemini 3 Pro Preview 系列
                 const proStandardModels = [];  // 标准 2.5-pro（不含 preview-06-05）
-                const flashLatestModels = [];  // flash-latest 系列
-                const flashLiteLatestModels = []; // flash-lite-latest 系列
-                const flashModels = [];        // flash 系列（不含 lite 和 latest）
-                const flashLiteModels = [];    // flash-lite 系列（不含 latest）
+                const flashModels = [];        // flash 系列（不含 lite）
+                const flashLiteModels = [];    // flash-lite 系列
 
                 for (const [name, score] of Object.entries(data.geminicli)) {
                     const model = { name, score, desc: getModelDescription(name) };
 
                     if (name.includes('gemini-3-pro-preview')) {
                         gemini3ProModels.push(model);
-                    } else if (name.includes('flash-lite-latest')) {
-                        flashLiteLatestModels.push(model);
-                    } else if (name.includes('flash-latest')) {
-                        flashLatestModels.push(model);
                     } else if (name.includes('pro')) {
                         proStandardModels.push(model);
                     } else if (name.includes('flash-lite')) {
@@ -8022,33 +8016,12 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
                     html += '<br>';
                 }
 
-                // 第三排：Flash Latest 系列（自动更新到最新版本）
-                if (flashLatestModels.length > 0) {
-                    flashLatestModels.sort((a, b) => b.score - a.score);
-                    html += `<div class="group-header" data-tier="5">
-                        <span>GEMINICLI / FLASH LATEST</span>
-                        <span>TIER 5</span>
-                    </div>`;
-
-                    for (const model of flashLatestModels) {
-                        html += `<div class="model-row">
-                            <div class="row-info">
-                                <span class="row-name">${model.name}</span>
-                                <span class="row-desc">${model.desc}</span>
-                            </div>
-                            <div class="row-score">${model.score.toFixed(2)}</div>
-                        </div>`;
-                    }
-
-                    html += '<br>';
-                }
-
-                // 第四排：Flash 系列
+                // 第三排：Flash 系列
                 if (flashModels.length > 0) {
                     flashModels.sort((a, b) => b.score - a.score);
-                    html += `<div class="group-header" data-tier="6">
+                    html += `<div class="group-header" data-tier="5">
                         <span>GEMINICLI / FLASH SERIES</span>
-                        <span>TIER 6</span>
+                        <span>TIER 5</span>
                     </div>`;
 
                     for (const model of flashModels) {
@@ -8064,33 +8037,12 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
                     html += '<br>';
                 }
 
-                // 第五排：Flash Lite Latest 系列（自动更新，超低成本）
-                if (flashLiteLatestModels.length > 0) {
-                    flashLiteLatestModels.sort((a, b) => b.score - a.score);
-                    html += `<div class="group-header" data-tier="7">
-                        <span>GEMINICLI / FLASH LITE LATEST</span>
-                        <span>TIER 7</span>
-                    </div>`;
-
-                    for (const model of flashLiteLatestModels) {
-                        html += `<div class="model-row">
-                            <div class="row-info">
-                                <span class="row-name">${model.name}</span>
-                                <span class="row-desc">${model.desc}</span>
-                            </div>
-                            <div class="row-score">${model.score.toFixed(2)}</div>
-                        </div>`;
-                    }
-
-                    html += '<br>';
-                }
-
-                // 第六排：Flash Lite 系列（最低成本）
+                // 第四排：Flash Lite 系列（最低成本）
                 if (flashLiteModels.length > 0) {
                     flashLiteModels.sort((a, b) => b.score - a.score);
-                    html += `<div class="group-header" data-tier="8">
+                    html += `<div class="group-header" data-tier="7">
                         <span>GEMINICLI / FLASH LITE SERIES</span>
-                        <span>TIER 8</span>
+                        <span>TIER 7</span>
                     </div>`;
 
                     for (const model of flashLiteModels) {
@@ -8130,18 +8082,6 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
             if (name.includes('gemini-3-pro-preview-nothinking')) return 'CLI 3.0 · Fast Response';
             if (name.includes('gemini-3-pro-preview-search')) return 'CLI 3.0 · Search Enhanced';
             if (name.includes('gemini-3-pro-preview')) return 'CLI 3.0 · Latest Generation';
-
-            // GeminiCLI Flash Latest 系列（自动更新到最新版本）
-            if (name.includes('flash-latest-search') && !name.includes('lite')) return 'Latest Flash · Search Enhanced';
-            if (name.includes('flash-latest-maxthinking') && !name.includes('lite')) return 'Latest Flash · Extended Reasoning';
-            if (name.includes('flash-latest-nothinking') && !name.includes('lite')) return 'Latest Flash · Fast Response';
-            if (name.includes('flash-latest') && !name.includes('search') && !name.includes('thinking') && !name.includes('lite')) return 'Latest Flash · Auto-Updated';
-
-            // GeminiCLI Flash Lite Latest 系列（自动更新，超低成本）
-            if (name.includes('flash-lite-latest-search')) return 'Latest Lite · Search + Low Cost';
-            if (name.includes('flash-lite-latest-maxthinking')) return 'Latest Lite · Reasoning Budget';
-            if (name.includes('flash-lite-latest-nothinking')) return 'Latest Lite · Ultra Fast';
-            if (name.includes('flash-lite-latest')) return 'Latest Lite · Auto-Updated';
 
             // GeminiCLI Pro - 标准系列
             if (name.includes('2.5-pro-search')) return 'Active Retrieval Generation';
