@@ -426,7 +426,7 @@ class CredentialManager:
 
                 log.info(f"[OK] Gemini credential {credential_name} stored successfully")
 
-                # 2. 创建默认状态记录（如果不存在）
+                # 2. 创建默认状态记录（如果不存在）- 只保留核心字段
                 all_states = await self._storage_adapter.get_all_credential_states()
                 if credential_name not in all_states:
                     import time
@@ -435,11 +435,6 @@ class CredentialManager:
                         "disabled": False,
                         "last_success": time.time(),
                         "user_email": None,
-                        "gemini_2_5_pro_calls": 0,
-                        "total_calls": 0,
-                        "next_reset_time": None,
-                        "daily_limit_gemini_2_5_pro": 100,
-                        "daily_limit_total": 1000,
                     }
                     await self._storage_adapter.update_credential_state(credential_name, default_state)
                     log.debug(f"Created default state for: {credential_name}")

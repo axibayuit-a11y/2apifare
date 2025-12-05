@@ -709,7 +709,7 @@ async def upload_credentials(
                     # 存储到统一存储系统
                     success = await storage_adapter.store_credential(filename, credential_data)
                     if success:
-                        # 创建默认状态记录（如果不存在）
+                        # 创建默认状态记录（如果不存在）- 只保留核心字段
                         try:
                             import time
 
@@ -718,11 +718,6 @@ async def upload_credentials(
                                 "disabled": False,
                                 "last_success": time.time(),
                                 "user_email": None,
-                                "gemini_2_5_pro_calls": 0,
-                                "total_calls": 0,
-                                "next_reset_time": None,
-                                "daily_limit_gemini_2_5_pro": 100,
-                                "daily_limit_total": 1000,
                             }
                             # 只在状态不存在时创建，避免覆盖现有状态
                             # 检查数据库中是否真正存在状态记录
@@ -1946,32 +1941,9 @@ async def websocket_logs(websocket: WebSocket):
 
 
 # =============================================================================
-# Usage Statistics API (使用统计API) - 已禁用，保留空接口以兼容前端
+# Usage Statistics API - 已移除
+# 凭证统计功能已完全移除，因为它只是本地计数，不影响 Google API 的实际配额
 # =============================================================================
-
-
-@router.get("/usage/stats")
-async def get_usage_statistics(filename: Optional[str] = None, token: str = Depends(verify_token)):
-    """
-    获取使用统计信息 - 已禁用，返回空数据
-    凭证统计功能已移除，因为它只是本地计数，不影响 Google API 的实际配额
-    """
-    return JSONResponse(content={"success": True, "data": {}})
-
-
-@router.get("/usage/aggregated")
-async def get_aggregated_usage_statistics(token: str = Depends(verify_token)):
-    """
-    获取聚合使用统计信息 - 已禁用，返回空数据
-    """
-    return JSONResponse(content={
-        "success": True,
-        "data": {
-            "total_gemini_2_5_pro_calls": 0,
-            "total_all_model_calls": 0,
-            "total_files": 0
-        }
-    })
 
 
 # ==================== IP 统计功能 ====================

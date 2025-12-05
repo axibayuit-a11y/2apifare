@@ -34,12 +34,19 @@ DEFAULT_SAFETY_SETTINGS = [
 # Helper function to get base model name from any variant
 def get_base_model_name(model_name):
     """Convert variant model name to base model name."""
-    # Remove all possible suffixes in order
+    # Remove all possible suffixes (supports multiple suffixes in any order)
     suffixes = ["-maxthinking", "-nothinking", "-search"]
-    for suffix in suffixes:
-        if model_name.endswith(suffix):
-            return model_name[: -len(suffix)]
-    return model_name
+    result = model_name
+    # Keep removing suffixes until no more matches
+    changed = True
+    while changed:
+        changed = False
+        for suffix in suffixes:
+            if result.endswith(suffix):
+                result = result[: -len(suffix)]
+                changed = True
+                break
+    return result
 
 
 # Helper function to check if model uses search grounding
@@ -67,6 +74,10 @@ def get_thinking_budget(model_name):
     if is_nothinking_model(model_name):
         return 128  # Limited thinking for pro
     elif is_maxthinking_model(model_name):
+        # Flash 模型使用较小的 thinking budget
+        base_model = get_base_model_name(get_base_model_from_feature_model(model_name))
+        if "flash" in base_model:
+            return 24576
         return 32768
     else:
         # Default thinking budget for regular models

@@ -4138,47 +4138,10 @@
 
             <!-- 使用统计标签页 -->
             <div id="usageTab" class="tab-content">
-                <h3>使用统计</h3>
+                <h3>IP 统计</h3>
 
-                <!-- 二级标签页切换按钮 -->
-                <div class="sub-tabs" style="margin: 20px 0; border-bottom: 2px solid rgba(255, 255, 255, 0.12);">
-                    <button class="sub-tab active" onclick="switchUsageSubTab('credentials')" id="credentialsSubTab">
-                        📊 凭证统计
-                    </button>
-                    <button class="sub-tab" onclick="switchUsageSubTab('ip')" id="ipSubTab">
-                        🌐 IP 统计
-                    </button>
-                </div>
-
-                <!-- 凭证统计子标签页 - 已禁用 -->
-                <div id="credentialsStatsContent" class="sub-tab-content">
-                    <div class="config-group">
-                        <h4>📊 凭证统计功能已禁用</h4>
-                        <div class="config-info">
-                            <p style="color: #6eb5ff; margin-bottom: 15px;">
-                                凭证统计功能已移除，原因如下：
-                            </p>
-                            <ul>
-                                <li><strong>本地统计无实际作用：</strong>统计的是本地调用次数，不是 Google API 的实际配额</li>
-                                <li><strong>重置配额不会恢复 429：</strong>429 错误是 Google API 返回的，本地重置无法恢复</li>
-                                <li><strong>减少不必要的 I/O：</strong>每次请求都写入存储会增加开销</li>
-                            </ul>
-                            <p style="color: #aaa; margin-top: 15px;">
-                                <strong>凭证管理仍然正常工作：</strong>
-                            </p>
-                            <ul>
-                                <li>✅ 错误码记录（用于自动禁用问题凭证）</li>
-                                <li>✅ 429/403/404 错误时自动切换凭证</li>
-                                <li>✅ Token 过期自动刷新</li>
-                                <li>✅ IP 统计和限流（见 IP 统计标签页）</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-                <!-- 凭证统计子标签页结束 -->
-
-                <!-- IP 统计子标签页 -->
-                <div id="ipStatsContent" class="sub-tab-content" style="display: none;">
+                <!-- IP 统计内容 -->
+                <div id="ipStatsContent">
                     <p>查看每个 IP 的请求统计、地理位置和访问控制</p>
 
                     <!-- IP 统计概览 -->
@@ -5010,9 +4973,9 @@ docker run -e GCLI_CREDS_1='{"client_id":"..."}' \
             if (tabName === 'manage') {
                 refreshCredsStatus(true); // 切换标签页时重置到第一页
             }
-            // 如果切换到使用统计页面，自动加载统计
+            // 如果切换到使用统计页面（现在是 IP 统计），自动加载 IP 统计
             if (tabName === 'usage') {
-                refreshUsageStats();
+                refreshIPStats();
             }
             // 如果切换到配置管理页面，自动加载配置
             if (tabName === 'config') {
