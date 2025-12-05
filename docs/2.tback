@@ -1,35 +1,36 @@
 export default {
   async fetch(request, env, ctx) {
+    // 1. 定义 CORS 响应头
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': '*',
     };
 
+    // 2. 优先处理 OPTIONS 预检请求
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders });
     }
 
     const url = new URL(request.url);
     const path = url.pathname;
-
-    // 路由映射表（按长度排序，避免冲突）
+    
+    // --- 路由映射表配置 ---
+    // /daily    -> 主端点 (Daily 环境)
+    // /autopush -> 备用端点 (Autopush 环境)
+    // /oauth2   -> 认证中心
     const routeMap = {
-      '/oauth2': 'oauth2.googleapis.com',
-      '/usage': 'serviceusage.googleapis.com',
-      '/code': 'cloudcode-pa.googleapis.com',
-      '/crm': 'cloudresourcemanager.googleapis.com',
-      '/api': 'www.googleapis.com'
+      '/daily': 'daily-cloudcode-pa.sandbox.googleapis.com',
+      '/autopush': 'autopush-cloudcode-pa.sandbox.googleapis.com',
+      '/oauth2': 'oauth2.googleapis.com'
     };
-
-    // 按路径长度排序（长的优先匹配）
-    const sortedRoutes = Object.entries(routeMap)
-      .sort((a, b) => b[0].length - a[0].length);
+    // --------------------
 
     let targetHost = '';
     let matchedPrefix = '';
 
-    for (const [prefix, host] of sortedRoutes) {
+    // 遍历映射表寻找匹配的前缀
+    for (const [prefix, host] of Object.entries(routeMap)) {
       if (path.startsWith(prefix)) {
         targetHost = host;
         matchedPrefix = prefix;
@@ -37,21 +38,23 @@ export default {
       }
     }
 
+    // 如果没有匹配到任何路由，返回 404
     if (!targetHost) {
-      return new Response(JSON.stringify({
-        status: "Worker is active. Endpoint not found.",
-        path: path
+      return new Response(JSON.stringify({ 
+        status: "Worker is active. Route not found.", 
+        tips: "Please use /daily/..., /autopush/... or /oauth2/..." 
       }), {
-        status: 200,
+        status: 404,
         headers: { ...corsHeaders, 'content-type': 'application/json' }
       });
     }
 
-    // 重写 URL（使用 substring 更安全）
+    // 3. 重写 URL
     url.hostname = targetHost;
-    url.pathname = path.substring(matchedPrefix.length);
+    // 去掉前缀，保留剩余路径。例如 /daily/v1internal... 变成 /v1internal...
+    url.pathname = path.replace(matchedPrefix, ''); 
 
-    // 清洗请求头
+    // 4. 清洗请求头 (防止谷歌识别出代理或因为 Host 不匹配拒绝)
     const newHeaders = new Headers(request.headers);
     newHeaders.delete('Host');
     newHeaders.delete('cf-connecting-ip');
@@ -60,36 +63,29 @@ export default {
     newHeaders.delete('cf-visitor');
     newHeaders.delete('x-forwarded-proto');
     newHeaders.delete('x-real-ip');
+    newHeaders.delete('Origin');
+    newHeaders.delete('Referer');
 
-    // 构造新请求（GET/HEAD 不传 body）
-    const requestOptions = {
+    // 5. 构造新请求
+    const newRequest = new Request(url.toString(), {
       method: request.method,
       headers: newHeaders,
+      body: request.body,
       redirect: 'follow'
-    };
-
-    if (request.method !== 'GET' && request.method !== 'HEAD') {
-      requestOptions.body = request.body;
-    }
-
-    const newRequest = new Request(url.toString(), requestOptions);
+    });
 
     try {
       const response = await fetch(newRequest);
-
+      
+      // 6. 重新包装响应，确保 CORS 头存在
       const newResponse = new Response(response.body, response);
       newResponse.headers.set('Access-Control-Allow-Origin', '*');
-
+      
       return newResponse;
     } catch (e) {
-      // 改进错误信息
-      return new Response(JSON.stringify({
-        error: e.message,
-        target: targetHost,
-        path: url.pathname
-      }), {
+      return new Response(JSON.stringify({ error: e.message }), { 
         status: 500,
-        headers: { ...corsHeaders, 'content-type': 'application/json' }
+        headers: corsHeaders
       });
     }
   }
