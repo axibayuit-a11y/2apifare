@@ -1,0 +1,60 @@
+# yaml-language-server: $schema=https://schema.zeabur.app/template.json
+apiVersion: zeabur.com/v1
+kind: Template
+metadata:
+    name: 2apifare
+spec:
+    description: 将 GeminiCLI 转换为 OpenAI 和 GEMINI API 接口，支持 Antigravity 模型
+    variables:
+        - key: PASSWORD
+          type: STRING
+          name: API密码
+          description: 用于访问API和控制面板的密码
+        - key: DOMAIN
+          type: DOMAIN
+          name: 域名
+          description: 服务访问域名
+    tags:
+        - ai
+        - api
+        - gemini
+        - openai
+        - antigravity
+    readme: |
+        # 2apifare
+
+        将 GeminiCLI 转换为 OpenAI 和 GEMINI API 接口
+
+        ## 功能特性
+        - 支持 OpenAI 兼容 API
+        - 支持 Gemini 原生 API
+        - 支持 Antigravity 模型（Claude、Gemini 3 Pro 等）
+        - 多账户管理和自动轮换
+        - 实时日志监控
+
+        部署后请访问您的域名进行配置。
+
+        魔改项目地址：https://github.com/axibayuit-a11y/2apifare
+        源项目地址：https://github.com/su-kaka/gcli2api
+    services:
+        - name: 2apifare
+          template: PREBUILT
+          spec:
+              source:
+                  image: ghcr.io/axibayuit-a11y/2apifare:latest
+              ports:
+                  - id: web
+                    port: 7861
+                    type: HTTP
+              volumes:
+                  - id: creds
+                    dir: /app/creds
+              env:
+                  DOMAIN:
+                      default: ${DOMAIN}
+                  HOST:
+                      default: 0.0.0.0
+                  PASSWORD:
+                      default: ${PASSWORD}
+                  PORT:
+                      default: "7861"
