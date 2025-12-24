@@ -6,6 +6,8 @@ This module is used by both OpenAI compatibility layer and native Gemini endpoin
 import asyncio
 import gc
 import json
+import re
+import time
 
 from fastapi import Response
 from fastapi.responses import StreamingResponse
@@ -28,6 +30,64 @@ from .httpx_client import http_client, create_streaming_client_with_kwargs
 from log import log
 from .credential_manager import CredentialManager
 from .utils import get_user_agent
+
+
+def _parse_quota_reset_delay(response_content: str) -> float:
+    """
+    从 429 响应中解析 quotaResetDelay，返回冷却截止时间戳
+    
+    Args:
+        response_content: 429 响应内容
+        
+    Returns:
+        冷却截止时间戳（Unix时间戳），如果解析失败返回 None
+    """
+    try:
+        # 尝试解析 JSON
+        data = json.loads(response_content)
+        details = data.get("error", {}).get("details", [])
+        
+        for detail in details:
+            metadata = detail.get("metadata", {})
+            
+            # 优先使用 quotaResetTimeStamp
+            if "quotaResetTimeStamp" in metadata:
+                from datetime import datetime, timezone
+                timestamp_str = metadata["quotaResetTimeStamp"]
+                # 解析 ISO 格式时间
+                if timestamp_str.endswith("Z"):
+                    timestamp_str = timestamp_str.replace("Z", "+00:00")
+                reset_dt = datetime.fromisoformat(timestamp_str)
+                return reset_dt.timestamp()
+            
+            # 回退到 quotaResetDelay
+            if "quotaResetDelay" in metadata:
+                delay_str = metadata["quotaResetDelay"]
+                # 解析格式如 "12h11m35.9550198s"
+                total_seconds = 0
+                
+                # 匹配小时
+                hours_match = re.search(r'(\d+)h', delay_str)
+                if hours_match:
+                    total_seconds += int(hours_match.group(1)) * 3600
+                
+                # 匹配分钟
+                minutes_match = re.search(r'(\d+)m', delay_str)
+                if minutes_match:
+                    total_seconds += int(minutes_match.group(1)) * 60
+                
+                # 匹配秒（可能有小数）
+                seconds_match = re.search(r'([\d.]+)s', delay_str)
+                if seconds_match:
+                    total_seconds += float(seconds_match.group(1))
+                
+                if total_seconds > 0:
+                    return time.time() + total_seconds
+        
+        return None
+    except Exception as e:
+        log.debug(f"Failed to parse quota reset delay: {e}")
+        return None
 
 
 def _create_error_response(message: str, status_code: int = 500) -> Response:
@@ -284,9 +344,11 @@ async def send_gemini_request(
                                 "Google API returned status 429 (STREAMING) - quota exhausted, no response details available"
                             )
 
+                        # 解析冷却时间并记录
+                        cooldown_until = _parse_quota_reset_delay(response_content) if response_content else None
                         if credential_manager and current_file:
                             await credential_manager.record_api_call_result(
-                                current_file, False, 429
+                                current_file, False, 429, cooldown_until=cooldown_until
                             )
 
                         # 清理资源
@@ -493,10 +555,14 @@ async def send_gemini_request(
                     resp = await client.post(target_url, content=final_post_data, headers=headers)
 
                     if resp.status_code == 429:
-                        # 记录429错误
+                        # 获取响应内容用于解析冷却时间
+                        response_content = resp.text
+                        
+                        # 解析冷却时间并记录429错误
+                        cooldown_until = _parse_quota_reset_delay(response_content) if response_content else None
                         if credential_manager and current_file:
                             await credential_manager.record_api_call_result(
-                                current_file, False, 429
+                                current_file, False, 429, cooldown_until=cooldown_until
                             )
 
                         # 如果重试可用且未达到最大次数，继续重试
